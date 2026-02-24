@@ -1,36 +1,44 @@
 #![allow(unused_variables)]
-use std::env;
+use interpreter::*;
+use miette::{IntoDiagnostic, WrapErr};
 use std::fs;
+use std::path::PathBuf;
 
-fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 3 {
-        eprintln!("Usage: {} tokenize <filename>", args[0]);
-        return;
-    }
+use clap::{Parser, Subcommand};
 
-    let command = &args[1];
-    let filename = &args[2];
+/// Simple program to greet a person
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[command(subcommand)]
+    command: Commands,
+}
 
-    match command.as_str() {
-        "tokenize" => {
+#[derive(Subcommand, Debug)]
+enum Commands {
+    /// does tokenize
+    Tokenize { filename: PathBuf },
+}
+
+fn main() -> miette::Result<()> {
+    let args = Args::parse();
+
+    match args.command {
+        Commands::Tokenize { filename } => {
             // You can use print statements as follows for debugging, they'll be visible when running tests.
             eprintln!("Logs from your program will appear here!");
 
-            let file_contents = fs::read_to_string(filename).unwrap_or_else(|_| {
-                eprintln!("Failed to read file {}", filename);
-                String::new()
-            });
+            let file_contents = fs::read_to_string(&filename)
+                .into_diagnostic()
+                .wrap_err_with(|| format!("reading '{}' failed", filename.display()))?;
 
-            // TODO: Uncomment the code below to pass the first stage
-            if !file_contents.is_empty() {
-                panic!("Scanner not implemented");
-            } else {
-                println!("EOF  null"); // Placeholder, replace this line when implementing the scanner
+            let lexer = Lexer::new(&file_contents);
+            for token in lexer {
+                let token = token?;
+                println!("{token}");
             }
-        }
-        _ => {
-            eprintln!("Unknown command: {}", command);
+            println!("EOF null");
         }
     }
+    Ok(())
 }

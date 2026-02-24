@@ -1,6 +1,11 @@
 [package]
 name = "interpreter"
 version = "0.1.0"
+authors = ["Jayanta pradhan"]
 edition = "2024"
+rust-version = "1.92.0" 
 
 [dependencies]
+miette = { version = "7.6.0", features = ["fancy"] }                                # Error handling
+bytes = "1.11.1"                                # Helps manages buffer
+clap = { version = "4.5.60", features = ["derive"] }
