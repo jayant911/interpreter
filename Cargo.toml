@@ -3,7 +3,9 @@ name = "interpreter"
 version = "0.1.0"
 authors = ["Jayanta pradhan"]
 edition = "2024"
-rust-version = "1.92.0" 
+rust-version = "1.92.0"
+license = "MIT"
+description = "A Lox tree-walk interpreter in Rust, following Crafting Interpreters by Robert Nystrom"
 
 [dependencies]
 miette = { version = "7.6.0", features = ["fancy"] }                                # Error handling
