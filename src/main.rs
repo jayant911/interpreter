@@ -1,44 +1,80 @@
-#![allow(unused_variables)]
-use interpreter::*;
-use miette::{IntoDiagnostic, WrapErr};
+#![allow(dead_code)]
+
+mod scanner;
+use crate::scanner::*;
+
+use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::io::Write;
+use std::io::{self, BufRead};
+use std::process::exit;
 
-use clap::{Parser, Subcommand};
-
-/// Simple program to greet a person
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct Args {
-    #[command(subcommand)]
-    command: Commands,
+fn run_file(path: &str) -> Result<(), String> {
+    match fs::read_to_string(path) {
+        Err(msg) => Err(msg.to_string()),
+        Ok(contents) => run(&contents),
+    }
+    // run(contents);
 }
 
-#[derive(Subcommand, Debug)]
-enum Commands {
-    /// does tokenize
-    Tokenize { filename: PathBuf },
-}
+fn run(contents: &str) -> Result<(), String> {
+    let scanner = Scanner::new(contents);
+    let tokens = scanner.scan_tokens()?;
 
-fn main() -> miette::Result<()> {
-    let args = Args::parse();
-
-    match args.command {
-        Commands::Tokenize { filename } => {
-            // You can use print statements as follows for debugging, they'll be visible when running tests.
-            eprintln!("Logs from your program will appear here!");
-
-            let file_contents = fs::read_to_string(&filename)
-                .into_diagnostic()
-                .wrap_err_with(|| format!("reading '{}' failed", filename.display()))?;
-
-            let lexer = Lexer::new(&file_contents);
-            for token in lexer {
-                let token = token?;
-                println!("{token}");
-            }
-            println!("EOF null");
-        }
+    for token in tokens {
+        println!("{:?}", token);
     }
     Ok(())
+}
+
+fn run_prompt() -> Result<(), String> {
+    loop {
+        print!("> ");
+        match io::stdout().flush() {
+            Ok(_) => (),
+            Err(_) => return Err("Could not flush stdout".to_string()),
+        }
+
+        let mut buffer = String::new();
+        let stdin = io::stdin();
+        let mut handle = stdin.lock();
+        match handle.read_line(&mut buffer) {
+            Ok(n) => {
+                if n <= 1 {
+                    return Ok(());
+                }
+            }
+            Err(_) => return Err("Couldnt read line".to_string()),
+        }
+        println!("ECHO: {}", buffer);
+        match run(&buffer) {
+            Ok(_) => (),
+            Err(msg) => println!("{}", msg),
+        }
+    }
+}
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() > 2 {
+        println!("Usage: jlox [script]");
+        exit(64);
+    } else if args.len() == 2 {
+        match run_file(&args[1]) {
+            Ok(_) => exit(0),
+            Err(msg) => {
+                println!("ERROR:\n{}", msg);
+                exit(1);
+            }
+        }
+    } else {
+        match run_prompt() {
+            Ok(_) => exit(0),
+            Err(msg) => {
+                println!("ERROR\n{}", msg);
+                exit(1);
+            }
+        }
+    }
 }
