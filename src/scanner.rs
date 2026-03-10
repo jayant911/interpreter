@@ -106,6 +106,7 @@ impl Scanner {
                 self.line += 1;
                 Ok(())
             }
+            '"' => self.string_literal(),
             _ => Err(format!(
                 "Unrecognized character: {} at line {}",
                 c, self.line
@@ -145,10 +146,10 @@ impl Scanner {
     }
 
     fn add_token(&mut self, token_type: TokenType) -> Result<(), String> {
-        self.add_token_to(token_type, None)
+        self.add_token_literal(token_type, None)
     }
 
-    fn add_token_to(
+    fn add_token_literal(
         &mut self,
         token_type: TokenType,
         literal: Option<LiteralValue>,
@@ -161,6 +162,26 @@ impl Scanner {
             line_number: self.line,
         });
         Ok(())
+    }
+
+    fn string_literal(&mut self) -> Result<(), String> {
+        while self.peek() != '"' && !self.is_at_end() {
+            if self.peek() == '\n' {
+                self.line += 1;
+            }
+            self.advance();
+        }
+
+        if self.is_at_end() {
+            return Err("Unterminated string".to_string());
+        }
+
+        // The closing ".
+        self.advance();
+
+        // Trim the surrounding quotes.
+        let value = self.source[self.start as usize + 1..self.current as usize - 1].to_string();
+        self.add_token_literal(TokenType::String, Some(LiteralValue::String(value)))
     }
 }
 
@@ -261,7 +282,6 @@ mod tests {
         match tokens {
             Err(msg) => println!("{}", msg),
             Ok(tokens) => {
-                println!("{:?}", tokens);
                 assert_eq!(tokens.len(), 12);
                 assert_eq!(tokens[0].token_type, TokenType::LeftBrace);
                 assert_eq!(tokens[1].token_type, TokenType::LeftParn);
@@ -275,6 +295,32 @@ mod tests {
                 assert_eq!(tokens[9].token_type, TokenType::Semicolon);
                 assert_eq!(tokens[10].token_type, TokenType::Slash);
                 assert_eq!(tokens[11].token_type, TokenType::Eof);
+            }
+        }
+    }
+
+    #[test]
+    fn test_string_literal() {
+        let code = "{()}  <= != == ,.;/ \"this is string <> =!\" //";
+        let mut scanner = Scanner::new(code);
+        let tokens = scanner.scan_tokens();
+        match tokens {
+            Err(msg) => println!("{}", msg),
+            Ok(tokens) => {
+                assert_eq!(tokens.len(), 13);
+                assert_eq!(tokens[0].token_type, TokenType::LeftBrace);
+                assert_eq!(tokens[1].token_type, TokenType::LeftParn);
+                assert_eq!(tokens[2].token_type, TokenType::RightParn);
+                assert_eq!(tokens[3].token_type, TokenType::RightBrace);
+                assert_eq!(tokens[4].token_type, TokenType::LessEqual);
+                assert_eq!(tokens[5].token_type, TokenType::BangEqual);
+                assert_eq!(tokens[6].token_type, TokenType::EqualEqual);
+                assert_eq!(tokens[7].token_type, TokenType::Comma);
+                assert_eq!(tokens[8].token_type, TokenType::Dot);
+                assert_eq!(tokens[9].token_type, TokenType::Semicolon);
+                assert_eq!(tokens[10].token_type, TokenType::Slash);
+                assert_eq!(tokens[11].token_type, TokenType::String);
+                assert_eq!(tokens[12].token_type, TokenType::Eof);
             }
         }
     }
