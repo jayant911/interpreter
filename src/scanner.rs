@@ -234,7 +234,7 @@ pub enum TokenType {
     Eof,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum LiteralValue {
     Int(i64),
     Float(f64),
@@ -265,7 +265,7 @@ impl Token {
         }
     }
 
-    pub fn to_string(&self) -> String {
+    pub fn as_string(&self) -> String {
         format!("{:?} {} {:?}", self.token_type, self.lexeme, self.literal)
     }
 }
@@ -275,53 +275,80 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_scanner() {
+    fn test_handle_one_char_token() {
+        let code = "{()} ,.;/ //";
+        let mut scanner = Scanner::new(code);
+        let tokens = scanner.scan_tokens().unwrap();
+        assert_eq!(tokens.len(), 9);
+        assert_eq!(tokens[0].token_type, TokenType::LeftBrace);
+        assert_eq!(tokens[1].token_type, TokenType::LeftParn);
+        assert_eq!(tokens[2].token_type, TokenType::RightParn);
+        assert_eq!(tokens[3].token_type, TokenType::RightBrace);
+        assert_eq!(tokens[4].token_type, TokenType::Comma);
+        assert_eq!(tokens[5].token_type, TokenType::Dot);
+        assert_eq!(tokens[6].token_type, TokenType::Semicolon);
+        assert_eq!(tokens[7].token_type, TokenType::Slash);
+        assert_eq!(tokens[8].token_type, TokenType::Eof);
+    }
+
+    #[test]
+    fn test_hanele_two_cahr_token() {
         let code = "{()}  <= != == ,.;/ //";
         let mut scanner = Scanner::new(code);
-        let tokens = scanner.scan_tokens();
-        match tokens {
-            Err(msg) => println!("{}", msg),
-            Ok(tokens) => {
-                assert_eq!(tokens.len(), 12);
-                assert_eq!(tokens[0].token_type, TokenType::LeftBrace);
-                assert_eq!(tokens[1].token_type, TokenType::LeftParn);
-                assert_eq!(tokens[2].token_type, TokenType::RightParn);
-                assert_eq!(tokens[3].token_type, TokenType::RightBrace);
-                assert_eq!(tokens[4].token_type, TokenType::LessEqual);
-                assert_eq!(tokens[5].token_type, TokenType::BangEqual);
-                assert_eq!(tokens[6].token_type, TokenType::EqualEqual);
-                assert_eq!(tokens[7].token_type, TokenType::Comma);
-                assert_eq!(tokens[8].token_type, TokenType::Dot);
-                assert_eq!(tokens[9].token_type, TokenType::Semicolon);
-                assert_eq!(tokens[10].token_type, TokenType::Slash);
-                assert_eq!(tokens[11].token_type, TokenType::Eof);
-            }
-        }
+        let tokens = scanner.scan_tokens().unwrap();
+        assert_eq!(tokens.len(), 12);
+        assert_eq!(tokens[0].token_type, TokenType::LeftBrace);
+        assert_eq!(tokens[1].token_type, TokenType::LeftParn);
+        assert_eq!(tokens[2].token_type, TokenType::RightParn);
+        assert_eq!(tokens[3].token_type, TokenType::RightBrace);
+        assert_eq!(tokens[4].token_type, TokenType::LessEqual);
+        assert_eq!(tokens[5].token_type, TokenType::BangEqual);
+        assert_eq!(tokens[6].token_type, TokenType::EqualEqual);
+        assert_eq!(tokens[7].token_type, TokenType::Comma);
+        assert_eq!(tokens[8].token_type, TokenType::Dot);
+        assert_eq!(tokens[9].token_type, TokenType::Semicolon);
+        assert_eq!(tokens[10].token_type, TokenType::Slash);
+        assert_eq!(tokens[11].token_type, TokenType::Eof);
     }
 
     #[test]
     fn test_string_literal() {
-        let code = "{()}  <= != == ,.;/ \"this is string <> =!\" //";
+        let code = "/ \"this is string <> =!\" //";
+        let mut scanner = Scanner::new(code);
+        let tokens = scanner.scan_tokens().unwrap();
+        assert_eq!(tokens.len(), 3);
+        assert_eq!(tokens[0].token_type, TokenType::Slash);
+        assert_eq!(tokens[1].token_type, TokenType::String);
+        assert_eq!(
+            tokens[1].literal,
+            Some(LiteralValue::String("this is string <> =!".to_string()))
+        );
+        assert_eq!(tokens[2].token_type, TokenType::Eof);
+    }
+
+    #[test]
+    fn test_string_literal_unterminated() {
+        let code = "\"this is string";
         let mut scanner = Scanner::new(code);
         let tokens = scanner.scan_tokens();
         match tokens {
-            Err(msg) => println!("{}", msg),
-            Ok(tokens) => {
-                assert_eq!(tokens.len(), 13);
-                assert_eq!(tokens[0].token_type, TokenType::LeftBrace);
-                assert_eq!(tokens[1].token_type, TokenType::LeftParn);
-                assert_eq!(tokens[2].token_type, TokenType::RightParn);
-                assert_eq!(tokens[3].token_type, TokenType::RightBrace);
-                assert_eq!(tokens[4].token_type, TokenType::LessEqual);
-                assert_eq!(tokens[5].token_type, TokenType::BangEqual);
-                assert_eq!(tokens[6].token_type, TokenType::EqualEqual);
-                assert_eq!(tokens[7].token_type, TokenType::Comma);
-                assert_eq!(tokens[8].token_type, TokenType::Dot);
-                assert_eq!(tokens[9].token_type, TokenType::Semicolon);
-                assert_eq!(tokens[10].token_type, TokenType::Slash);
-                assert_eq!(tokens[11].token_type, TokenType::String);
-                assert_eq!(tokens[12].token_type, TokenType::Eof);
-            }
+            Err(msg) => (),
+            Ok(_) => panic!("should have failed"),
         }
+    }
+
+    #[test]
+    fn test_string_literal_multiline() {
+        let code = "\"this is string \n with multiline\"";
+        let mut scanner = Scanner::new(code);
+        let tokens = scanner.scan_tokens().unwrap();
+        assert_eq!(tokens.len(), 2);
+        assert_eq!(tokens[0].token_type, TokenType::String);
+        assert_eq!(
+            tokens[0].literal,
+            Some(LiteralValue::String(
+                "this is string \n with multiline".to_string()
+            ))
+        );
     }
 }
