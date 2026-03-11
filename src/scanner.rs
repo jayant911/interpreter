@@ -126,7 +126,7 @@ impl Scanner {
     }
 
     fn get_keywords() -> HashMap<&'static str, TokenType> {
-        let keywords = HashMap::from_iter([
+        HashMap::from_iter([
             ("and", TokenType::And),
             ("class", TokenType::Class),
             ("else", TokenType::Else),
@@ -143,9 +143,7 @@ impl Scanner {
             ("true", TokenType::True),
             ("var", TokenType::Var),
             ("while", TokenType::While),
-        ]);
-
-        keywords
+        ])
     }
 
     fn match_for_multichar(&mut self, expected: char) -> bool {
