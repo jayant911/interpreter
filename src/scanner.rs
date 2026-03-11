@@ -107,10 +107,16 @@ impl Scanner {
                 Ok(())
             }
             '"' => self.string_literal(),
-            _ => Err(format!(
-                "Unrecognized character: {} at line {}",
-                c, self.line
-            )),
+            c => {
+                if c.is_ascii_digit() {
+                    self.number()
+                } else {
+                    Err(format!(
+                        "Unrecognized character: {} at line {}",
+                        c, self.line
+                    ))
+                }
+            }
         }
     }
 
@@ -182,6 +188,41 @@ impl Scanner {
         // Trim the surrounding quotes.
         let value = self.source[self.start as usize + 1..self.current as usize - 1].to_string();
         self.add_token_literal(TokenType::String, Some(LiteralValue::String(value)))
+    }
+
+    fn number(&mut self) -> Result<(), String> {
+        while self.peek().is_ascii_digit() {
+            self.advance();
+        }
+
+        // Look for a fractional part.
+        if self.peek() == '.' && self.peek_next().is_ascii_digit() {
+            // Consume the '.'
+            self.advance();
+
+            while self.peek().is_ascii_digit() {
+                self.advance();
+            }
+        }
+        match self.source[self.start as usize..self.current as usize]
+            .to_string()
+            .parse::<f64>()
+        {
+            Ok(number) => {
+                self.add_token_literal(TokenType::Number, Some(LiteralValue::Float(number)))
+            }
+            Err(_) => Err("Unknown digit parsing".to_string()),
+        }
+    }
+
+    fn peek_next(&mut self) -> char {
+        if self.current as usize + 1 >= self.source.len() {
+            return '\0';
+        }
+        self.source
+            .chars()
+            .nth(self.current as usize + 1)
+            .unwrap_or('\0')
     }
 }
 
@@ -350,5 +391,66 @@ mod tests {
                 "this is string \n with multiline".to_string()
             ))
         );
+    }
+
+    #[test]
+    fn test_number_literal() {
+        let code = "/84 //";
+        let mut scanner = Scanner::new(code);
+        let tokens = scanner.scan_tokens().unwrap();
+        assert_eq!(tokens.len(), 3);
+        assert_eq!(tokens[0].token_type, TokenType::Slash);
+        assert_eq!(tokens[1].token_type, TokenType::Number);
+        assert_eq!(tokens[1].literal, Some(LiteralValue::Float(84.0)));
+        assert_eq!(tokens[2].token_type, TokenType::Eof);
+    }
+
+    #[test]
+    fn test_number_literal_with_point() {
+        let code = "/84.32 //";
+        let mut scanner = Scanner::new(code);
+        let tokens = scanner.scan_tokens().unwrap();
+        assert_eq!(tokens.len(), 3);
+        assert_eq!(tokens[0].token_type, TokenType::Slash);
+        assert_eq!(tokens[1].token_type, TokenType::Number);
+        assert_eq!(tokens[1].literal, Some(LiteralValue::Float(84.32)));
+        assert_eq!(tokens[2].token_type, TokenType::Eof);
+    }
+
+    #[test]
+    fn test_number_literal_with_front_point() {
+        let code = "/.84 //";
+        let mut scanner = Scanner::new(code);
+        let tokens = scanner.scan_tokens().unwrap();
+        assert_eq!(tokens.len(), 4);
+        assert_eq!(tokens[0].token_type, TokenType::Slash);
+        assert_eq!(tokens[1].token_type, TokenType::Dot);
+        assert_eq!(tokens[2].literal, Some(LiteralValue::Float(84.0)));
+        assert_eq!(tokens[2].token_type, TokenType::Number);
+    }
+
+    #[test]
+    fn test_number_literal_endwith_dot() {
+        let code = "/78. //";
+        let mut scanner = Scanner::new(code);
+        let tokens = scanner.scan_tokens().unwrap();
+        assert_eq!(tokens.len(), 4);
+        assert_eq!(tokens[0].token_type, TokenType::Slash);
+        assert_eq!(tokens[1].token_type, TokenType::Number);
+        assert_eq!(tokens[1].literal, Some(LiteralValue::Float(78.0)));
+        assert_eq!(tokens[2].token_type, TokenType::Dot);
+    }
+
+    #[test]
+    fn test_number_literal_multiline() {
+        let code = "/78\n89 //";
+        let mut scanner = Scanner::new(code);
+        let tokens = scanner.scan_tokens().unwrap();
+        assert_eq!(tokens.len(), 4);
+        assert_eq!(tokens[0].token_type, TokenType::Slash);
+        assert_eq!(tokens[1].token_type, TokenType::Number);
+        assert_eq!(tokens[1].literal, Some(LiteralValue::Float(78.0)));
+        assert_eq!(tokens[2].token_type, TokenType::Number);
+        assert_eq!(tokens[2].literal, Some(LiteralValue::Float(89.0)));
     }
 }
