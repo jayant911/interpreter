@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_variables)]
 
-use std::mem::take;
+use std::{collections::HashMap, mem::take};
 
 #[derive(Debug)]
 pub struct Scanner {
@@ -9,6 +9,7 @@ pub struct Scanner {
     start: u64,
     current: u64,
     line: u64,
+    keywords: HashMap<&'static str, TokenType>,
 }
 
 impl Scanner {
@@ -19,6 +20,7 @@ impl Scanner {
             start: 0,
             current: 0,
             line: 1,
+            keywords: Scanner::get_keywords(),
         }
     }
 
@@ -91,6 +93,7 @@ impl Scanner {
                 };
                 self.add_token(token)
             }
+
             '/' => {
                 if self.match_for_multichar('/') {
                     while self.peek() != '\n' && !self.is_at_end() {
@@ -110,6 +113,8 @@ impl Scanner {
             c => {
                 if c.is_ascii_digit() {
                     self.number()
+                } else if Scanner::is_alpha(c) {
+                    self.identifier()
                 } else {
                     Err(format!(
                         "Unrecognized character: {} at line {}",
@@ -118,6 +123,29 @@ impl Scanner {
                 }
             }
         }
+    }
+
+    fn get_keywords() -> HashMap<&'static str, TokenType> {
+        let keywords = HashMap::from_iter([
+            ("and", TokenType::And),
+            ("class", TokenType::Class),
+            ("else", TokenType::Else),
+            ("false", TokenType::False),
+            ("for", TokenType::For),
+            ("fun", TokenType::Fun),
+            ("if", TokenType::If),
+            ("nil", TokenType::Nil),
+            ("or", TokenType::Or),
+            ("print", TokenType::Print),
+            ("return", TokenType::Return),
+            ("super", TokenType::Super),
+            ("this", TokenType::This),
+            ("true", TokenType::True),
+            ("var", TokenType::Var),
+            ("while", TokenType::While),
+        ]);
+
+        keywords
     }
 
     fn match_for_multichar(&mut self, expected: char) -> bool {
@@ -224,9 +252,31 @@ impl Scanner {
             .nth(self.current as usize + 1)
             .unwrap_or('\0')
     }
+
+    fn identifier(&mut self) -> Result<(), String> {
+        while Scanner::is_alpha_numeric(self.peek()) {
+            self.advance();
+        }
+
+        let text = self.source[self.start as usize..self.current as usize].to_string();
+        match self.keywords.get(text.as_str()).copied() {
+            Some(token_type) => self.add_token(token_type),
+            None => {
+                self.add_token_literal(TokenType::Identifire, Some(LiteralValue::Identifire(text)))
+            }
+        }
+    }
+
+    fn is_alpha(c: char) -> bool {
+        c.is_ascii_alphabetic() || c == '_'
+    }
+
+    fn is_alpha_numeric(c: char) -> bool {
+        Scanner::is_alpha(c) || c.is_ascii_digit()
+    }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TokenType {
     //Single char token
     LeftParn,
@@ -252,17 +302,19 @@ pub enum TokenType {
     LessEqual,
 
     // Literals
-    Ientifire,
+    Identifire,
     String,
     Number,
 
     // Keywords
-    Aand,
+    And,
     Class,
     False,
     Fun,
     For,
-    IfNil,
+    If,
+    Else,
+    Nil,
     Or,
     Print,
     Return,
@@ -452,5 +504,80 @@ mod tests {
         assert_eq!(tokens[1].literal, Some(LiteralValue::Float(78.0)));
         assert_eq!(tokens[2].token_type, TokenType::Number);
         assert_eq!(tokens[2].literal, Some(LiteralValue::Float(89.0)));
+    }
+
+    #[test]
+    fn test_keyword() {
+        let code = "/ while //";
+        let mut scanner = Scanner::new(code);
+        let tokens = scanner.scan_tokens().unwrap();
+        assert_eq!(tokens.len(), 3);
+        assert_eq!(tokens[0].token_type, TokenType::Slash);
+        assert_eq!(tokens[1].token_type, TokenType::While);
+        assert_eq!(tokens[1].literal, None);
+    }
+
+    #[test]
+    fn test_identifire() {
+        let code = "/ complex_number //";
+        let mut scanner = Scanner::new(code);
+        let tokens = scanner.scan_tokens().unwrap();
+        assert_eq!(tokens.len(), 3);
+        assert_eq!(tokens[0].token_type, TokenType::Slash);
+        assert_eq!(tokens[1].token_type, TokenType::Identifire);
+        assert_eq!(
+            tokens[1].literal,
+            Some(LiteralValue::Identifire("complex_number".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_identifire_alphanumeric() {
+        let code = "/ feet6 //";
+        let mut scanner = Scanner::new(code);
+        let tokens = scanner.scan_tokens().unwrap();
+        assert_eq!(tokens.len(), 3);
+        assert_eq!(tokens[0].token_type, TokenType::Slash);
+        assert_eq!(tokens[1].token_type, TokenType::Identifire);
+        assert_eq!(
+            tokens[1].literal,
+            Some(LiteralValue::Identifire("feet6".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_identifire_startwith_underscore() {
+        let code = "/ _complexNumBer //";
+        let mut scanner = Scanner::new(code);
+        let tokens = scanner.scan_tokens().unwrap();
+        assert_eq!(tokens.len(), 3);
+        assert_eq!(tokens[0].token_type, TokenType::Slash);
+        assert_eq!(tokens[1].token_type, TokenType::Identifire);
+        assert_eq!(
+            tokens[1].literal,
+            Some(LiteralValue::Identifire("_complexNumBer".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_scanner() {
+        let code = "// comment\nfun (condition) return\n\"value\"";
+        let mut scanner = Scanner::new(code);
+        let tokens = scanner.scan_tokens().unwrap();
+        assert_eq!(tokens.len(), 7);
+        assert_eq!(tokens[0].token_type, TokenType::Fun);
+        assert_eq!(tokens[1].token_type, TokenType::LeftParn);
+        assert_eq!(tokens[2].token_type, TokenType::Identifire);
+        assert_eq!(
+            tokens[2].literal,
+            Some(LiteralValue::Identifire("condition".to_string()))
+        );
+        assert_eq!(tokens[3].token_type, TokenType::RightParn);
+        assert_eq!(tokens[4].token_type, TokenType::Return);
+        assert_eq!(tokens[5].token_type, TokenType::String);
+        assert_eq!(
+            tokens[5].literal,
+            Some(LiteralValue::String("value".to_string()))
+        );
     }
 }
