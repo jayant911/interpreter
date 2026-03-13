@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+mod generateast;
 mod scanner;
 use crate::scanner::*;
 
